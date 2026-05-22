@@ -1,0 +1,42 @@
+# Self-contained octflux stack: TimescaleDB + the collector service.
+#   cp .env.example .env && edit ; cp config.example.yaml config.yaml
+#   docker compose up -d --build
+services:
+  timescaledb:
+    image: timescale/timescaledb:2.27.1-pg17
+    container_name: octflux-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-octflux}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-octflux}
+    volumes:
+      # Host bind mount (same disk as the existing /home/timescaledb); reboot-safe.
+      - /home/octflux-timescaledb/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-octflux} -d ${POSTGRES_DB:-octflux}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:                    # exposed for external tools (pgAdmin etc.)
+      - "${OCTFLUX_DB_PORT:-5433}:5432"
+
+  octflux:
+    build: .
+    image: octflux:latest
+    container_name: octflux
+    restart: unless-stopped
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    ports:
+      - "${OCTFLUX_HTTP_PORT:-8088}:8088"   # REST /api/v1 + MCP /mcp
+    env_file:
+      - .env                  # OCTOPUS_*, POSTGRES_*
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+
+# DB data is a host bind mount at /home/octflux-timescaledb/data (no named volume).
+# Grafana is NOT bundled: dashboards live in grafana/ and are pushed to an existing
+# Grafana (>=12) with gcx -- see grafana/README.md. The DB is published on
+# ${OCTFLUX_DB_PORT:-5433} for that Grafana's datasource.

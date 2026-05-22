@@ -1,0 +1,21 @@
+# TimescaleDB data source for the octflux dashboards. The dashboard's ${DS_PG}
+# variable defaults to this uid. Grafana expands ${VAR} from the Grafana process
+# environment (NB: Grafana does NOT support ${VAR:-default} syntax, so set them).
+# Compose supplies these; for an external Grafana set OCTFLUX_DB_HOST to the host
+# and OCTFLUX_DB_PORT to the published port (5433).
+apiVersion: 1
+datasources:
+  - name: octflux-timescaledb
+    uid: octflux-timescaledb
+    type: grafana-postgresql-datasource
+    access: proxy
+    url: ${OCTFLUX_DB_HOST}:${OCTFLUX_DB_PORT}
+    user: ${POSTGRES_USER}
+    jsonData:
+      database: ${POSTGRES_DB}
+      sslmode: disable
+      postgresVersion: 1700
+      timescaledb: true
+    secureJsonData:
+      password: ${POSTGRES_PASSWORD}
+    editable: true

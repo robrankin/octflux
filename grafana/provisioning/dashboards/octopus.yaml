@@ -1,0 +1,15 @@
+# Grafana dashboard provider: loads every JSON under the mounted path into a
+# dashboard folder named "Octopus". Drop more octflux dashboards in dashboards/
+# and they all land in the same folder.
+apiVersion: 1
+providers:
+  - name: Octopus
+    orgId: 1
+    folder: Octopus            # <- the dashboard folder this creates / uses
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards/octopus
+      foldersFromFilesStructure: false

@@ -1,0 +1,72 @@
+# octflux configuration. Copy to config.yaml and edit.
+# ${VARS} are expanded from the environment, so secrets stay out of the file.
+
+octopus:
+  api_key: ${OCTOPUS_API_KEY}
+  account_number: ${OCTOPUS_ACCOUNT_NUMBER}
+  # postcode: NE17 7AD          # optional; for carbon intensity (else derived from account)
+
+logging:
+  level: INFO
+  format: console               # console | json
+
+api:
+  enabled: true
+  host: 0.0.0.0
+  port: 8088
+
+mcp:
+  enabled: true
+  mount_path: /mcp
+
+# What to collect, and how often. schedule is cron ("m h dom mon dow") or "<seconds>s".
+collectors:
+  tariffs:        { schedule: "0 * * * *", options: { days_back: 1, days_forward: 2 } }
+  consumption:    { schedule: "0 * * * *", options: { days_back: 3 } }
+  consumption_deep:                                  # same driver, weekly wide window
+                  { driver: consumption, schedule: "0 3 * * 0", options: { days_back: 100 } }
+  balance:        { schedule: "0 * * * *" }
+  dispatches:     { schedule: "0 * * * *" }          # auto-skips non-Intelligent accounts
+  carbon_intensity: { schedule: "0 */3 * * *" }
+  statements:     { schedule: "0 6 * * *" }
+  meter_readings: { schedule: "0 6 * * *", options: { page_size: 100, max_pages: 2 } }
+  octoplus:       { schedule: "0 6 * * *" }
+  agreements:     { schedule: "0 * * * *" }           # meter->tariff history; REQUIRED for fact_cost
+  dim_meter:      { schedule: "0 * * * *" }           # silver dimensions
+  dim_tariff:     { schedule: "0 * * * *" }
+
+# Silver fact_cost (consumption x rate) refresh; gold caggs refresh via Timescale.
+medallion:
+  enabled: true
+  schedule: "30 * * * *"
+  window_days: 7
+
+# Where it goes. Enable any combination; each batch is fanned out to all of them.
+sinks:
+  # Primary: TimescaleDB (the docker-compose service). Gets bronze + silver + gold.
+  warehouse:
+    driver: postgres
+    options:
+      dsn: "postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}"
+      auto_create: true       # build schema + hypertables + continuous aggregates on start
+      # 0 (default) = keep everything forever. Set >0 to drop the high-resolution raw
+      # consumption + fact_cost after N days (e.g. 1095 = 3y); the daily/monthly/hourly
+      # rollups and the price/audit tables are always kept. Reconciled on start, so
+      # changing this (incl. back to 0) takes effect on next restart.
+      retention_days: 0
+  # Optional local mirror / dev.
+  local:
+    driver: sqlite
+    enabled: false
+    options: { path: /tmp/octflux.db }
+  # Optional live event stream (host/creds via .env).
+  broker:
+    driver: mqtt
+    enabled: false
+    options:
+      host: ${MQTT_HOST}
+      port: ${MQTT_PORT:-1883}
+      base_topic: octflux
+      retain: false
+      # username: ${MQTT_USERNAME}
+      # password: ${MQTT_PASSWORD}

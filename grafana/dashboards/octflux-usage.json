@@ -1,0 +1,96 @@
+{
+  "uid": "octflux-usage",
+  "title": "Octopus — Usage",
+  "description": "Electricity & gas usage. Resolution auto-selects from the time range (<7d raw 30-min, <90d hourly, <2y daily, else monthly), or pick a fixed resolution with the Resolution dropdown.",
+  "tags": ["octflux", "octopus", "usage"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30m",
+  "time": { "from": "now-7d", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PG",
+        "label": "TimescaleDB",
+        "type": "datasource",
+        "query": "grafana-postgresql-datasource",
+        "current": { "text": "octflux-timescaledb", "value": "octflux-timescaledb" },
+        "hide": 0,
+        "refresh": 1
+      },
+      {
+        "name": "resolution",
+        "label": "Resolution",
+        "type": "custom",
+        "query": "auto,raw,hourly,daily,monthly",
+        "current": { "text": "auto", "value": "auto" },
+        "options": [
+          { "text": "auto", "value": "auto", "selected": true },
+          { "text": "raw", "value": "raw", "selected": false },
+          { "text": "hourly", "value": "hourly", "selected": false },
+          { "text": "daily", "value": "daily", "selected": false },
+          { "text": "monthly", "value": "monthly", "selected": false }
+        ],
+        "includeAll": false,
+        "multi": false,
+        "hide": 0
+      },
+      {
+        "name": "gas_kwh_per_m3",
+        "label": "Gas kWh per m³",
+        "type": "constant",
+        "query": "11.3627",
+        "current": { "text": "11.3627", "value": "11.3627" },
+        "hide": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Electricity (kWh)  —  import up / export down  ·  ${resolution} resolution",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+      "fieldConfig": {
+        "defaults": { "unit": "kwatth", "custom": { "drawStyle": "bars", "fillOpacity": 70, "stacking": { "mode": "none" } } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Import" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } } ] },
+          { "matcher": { "id": "byName", "options": "Export" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } } ] }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+          "format": "time_series",
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(make_interval(secs => $__interval_ms/1000.0), interval_start) AS time, sum(consumption) FILTER (WHERE not is_export) AS \"Import\", -sum(consumption) FILTER (WHERE is_export) AS \"Export\" FROM consumption WHERE $__timeFilter(interval_start) AND fuel='electricity' AND ('${resolution}'='raw' OR ('${resolution}'='auto' AND ($__unixEpochTo() - $__unixEpochFrom()) < 604800)) GROUP BY 1 UNION ALL SELECT time_bucket(make_interval(secs => $__interval_ms/1000.0), hour), sum(kwh) FILTER (WHERE not is_export), -sum(kwh) FILTER (WHERE is_export) FROM cagg_consumption_hourly WHERE $__timeFilter(hour) AND fuel='electricity' AND ('${resolution}'='hourly' OR ('${resolution}'='auto' AND ($__unixEpochTo() - $__unixEpochFrom()) >= 604800 AND ($__unixEpochTo() - $__unixEpochFrom()) < 7776000)) GROUP BY 1 UNION ALL SELECT time_bucket(make_interval(secs => $__interval_ms/1000.0), day), sum(kwh) FILTER (WHERE not is_export), -sum(kwh) FILTER (WHERE is_export) FROM cagg_consumption_daily WHERE day >= date_trunc('day', $__timeFrom()::timestamp) AND day < $__timeTo()::timestamp AND fuel='electricity' AND ('${resolution}'='daily' OR ('${resolution}'='auto' AND ($__unixEpochTo() - $__unixEpochFrom()) >= 7776000 AND ($__unixEpochTo() - $__unixEpochFrom()) < 63072000)) GROUP BY 1 UNION ALL SELECT month AS time, sum(kwh) FILTER (WHERE not is_export), -sum(kwh) FILTER (WHERE is_export) FROM cagg_consumption_monthly WHERE month >= date_trunc('month', $__timeFrom()::timestamp) AND month < $__timeTo()::timestamp AND fuel='electricity' AND ('${resolution}'='monthly' OR ('${resolution}'='auto' AND ($__unixEpochTo() - $__unixEpochFrom()) >= 63072000)) GROUP BY month ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Gas (kWh)  ·  ${resolution} resolution",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+      "fieldConfig": {
+        "defaults": { "unit": "kwatth", "custom": { "drawStyle": "bars", "fillOpacity": 70 }, "color": { "mode": "fixed", "fixedColor": "blue" } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+          "format": "time_series",
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(make_interval(secs => $__interval_ms/1000.0), interval_start) AS time, sum(consumption)*${gas_kwh_per_m3} AS \"Gas kWh\" FROM consumption WHERE $__timeFilter(interval_start) AND fuel='gas' AND ('${resolution}'='raw' OR ('${resolution}'='auto' AND ($__unixEpochTo() - $__unixEpochFrom()) < 604800)) GROUP BY 1 UNION ALL SELECT time_bucket(make_interval(secs => $__interval_ms/1000.0), hour), sum(kwh)*${gas_kwh_per_m3} FROM cagg_consumption_hourly WHERE $__timeFilter(hour) AND fuel='gas' AND ('${resolution}'='hourly' OR ('${resolution}'='auto' AND ($__unixEpochTo() - $__unixEpochFrom()) >= 604800 AND ($__unixEpochTo() - $__unixEpochFrom()) < 7776000)) GROUP BY 1 UNION ALL SELECT time_bucket(make_interval(secs => $__interval_ms/1000.0), day), sum(kwh)*${gas_kwh_per_m3} FROM cagg_consumption_daily WHERE day >= date_trunc('day', $__timeFrom()::timestamp) AND day < $__timeTo()::timestamp AND fuel='gas' AND ('${resolution}'='daily' OR ('${resolution}'='auto' AND ($__unixEpochTo() - $__unixEpochFrom()) >= 7776000 AND ($__unixEpochTo() - $__unixEpochFrom()) < 63072000)) GROUP BY 1 UNION ALL SELECT month AS time, sum(kwh)*${gas_kwh_per_m3} FROM cagg_consumption_monthly WHERE month >= date_trunc('month', $__timeFrom()::timestamp) AND month < $__timeTo()::timestamp AND fuel='gas' AND ('${resolution}'='monthly' OR ('${resolution}'='auto' AND ($__unixEpochTo() - $__unixEpochFrom()) >= 63072000)) GROUP BY month ORDER BY 1"
+        }
+      ]
+    }
+  ]
+}

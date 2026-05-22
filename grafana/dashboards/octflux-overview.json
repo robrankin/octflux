@@ -1,0 +1,176 @@
+{
+  "uid": "octflux-overview",
+  "title": "Octopus — Energy & Cost",
+  "description": "octflux gold layer: bill (import + standing − export) and kWh/carbon rollups.",
+  "tags": ["octflux", "octopus", "energy"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1h",
+  "time": { "from": "now-90d", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PG",
+        "label": "TimescaleDB",
+        "type": "datasource",
+        "query": "grafana-postgresql-datasource",
+        "current": { "text": "octflux-timescaledb", "value": "octflux-timescaledb" },
+        "hide": 0,
+        "refresh": 1
+      },
+      {
+        "name": "gas_kwh_per_m3",
+        "label": "Gas kWh per m³",
+        "type": "constant",
+        "query": "11.3627",
+        "current": { "text": "11.3627", "value": "11.3627" },
+        "hide": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Net bill — latest month",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+      "fieldConfig": { "defaults": { "unit": "currencyGBP", "decimals": 2 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+          "format": "table",
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT net_pence/100.0 AS net FROM bill_monthly ORDER BY month DESC LIMIT 1"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Import kWh — latest month",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+      "fieldConfig": { "defaults": { "unit": "kwatth", "decimals": 1 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+          "format": "table",
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT import_kwh FROM bill_monthly ORDER BY month DESC LIMIT 1"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Export kWh — latest month",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+      "fieldConfig": { "defaults": { "unit": "kwatth", "decimals": 1 }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "none" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+          "format": "table",
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT export_kwh FROM bill_monthly ORDER BY month DESC LIMIT 1"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Bill breakdown (£)  —  import + standing − export = net  ·  daily/monthly adaptive",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+      "fieldConfig": {
+        "defaults": { "unit": "currencyGBP", "custom": { "drawStyle": "bars", "fillOpacity": 60, "stacking": { "mode": "normal" } } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Net £" },
+            "properties": [ { "id": "custom.drawStyle", "value": "line" }, { "id": "custom.stacking", "value": { "mode": "none" } }, { "id": "custom.lineWidth", "value": 2 } ] }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+          "format": "time_series",
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT day AS time, import_pence/100.0 AS \"Import £\", standing_pence/100.0 AS \"Standing £\", -export_pence/100.0 AS \"Export £\", net_pence/100.0 AS \"Net £\" FROM bill_daily WHERE $__timeFilter(day) AND ($__unixEpochTo() - $__unixEpochFrom()) < 63072000 UNION ALL SELECT month AS time, import_pence/100.0, standing_pence/100.0, -export_pence/100.0, net_pence/100.0 FROM bill_monthly WHERE $__timeFilter(month) AND ($__unixEpochTo() - $__unixEpochFrom()) >= 63072000 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Consumption (kWh)  ·  adaptive",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+      "fieldConfig": { "defaults": { "unit": "kwatth", "custom": { "drawStyle": "bars", "fillOpacity": 70 } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+          "format": "time_series",
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(make_interval(secs => $__interval_ms/1000.0), interval_start) AS time, CASE WHEN fuel='electricity' AND is_export THEN 'Electricity export' WHEN fuel='electricity' THEN 'Electricity import' WHEN fuel='gas' THEN 'Gas' ELSE initcap(fuel) END AS metric, sum(consumption * CASE WHEN fuel='gas' THEN ${gas_kwh_per_m3} ELSE 1 END) AS value FROM consumption WHERE $__timeFilter(interval_start) AND ($__unixEpochTo() - $__unixEpochFrom()) < 604800 GROUP BY 1,2 UNION ALL SELECT time_bucket(make_interval(secs => $__interval_ms/1000.0), hour), CASE WHEN fuel='electricity' AND is_export THEN 'Electricity export' WHEN fuel='electricity' THEN 'Electricity import' WHEN fuel='gas' THEN 'Gas' ELSE initcap(fuel) END, sum(kwh * CASE WHEN fuel='gas' THEN ${gas_kwh_per_m3} ELSE 1 END) FROM cagg_consumption_hourly WHERE $__timeFilter(hour) AND ($__unixEpochTo() - $__unixEpochFrom()) >= 604800 AND ($__unixEpochTo() - $__unixEpochFrom()) < 7776000 GROUP BY 1,2 UNION ALL SELECT time_bucket(make_interval(secs => $__interval_ms/1000.0), day), CASE WHEN fuel='electricity' AND is_export THEN 'Electricity export' WHEN fuel='electricity' THEN 'Electricity import' WHEN fuel='gas' THEN 'Gas' ELSE initcap(fuel) END, sum(kwh * CASE WHEN fuel='gas' THEN ${gas_kwh_per_m3} ELSE 1 END) FROM cagg_consumption_daily WHERE $__timeFilter(day) AND ($__unixEpochTo() - $__unixEpochFrom()) >= 7776000 AND ($__unixEpochTo() - $__unixEpochFrom()) < 63072000 GROUP BY 1,2 UNION ALL SELECT month AS time, CASE WHEN fuel='electricity' AND is_export THEN 'Electricity export' WHEN fuel='electricity' THEN 'Electricity import' WHEN fuel='gas' THEN 'Gas' ELSE initcap(fuel) END, sum(kwh * CASE WHEN fuel='gas' THEN ${gas_kwh_per_m3} ELSE 1 END) FROM cagg_consumption_monthly WHERE $__timeFilter(month) AND ($__unixEpochTo() - $__unixEpochFrom()) >= 63072000 GROUP BY 1,2 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Daily carbon intensity (gCO₂/kWh)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+      "fieldConfig": { "defaults": { "unit": "none", "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 } }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+          "format": "time_series",
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(make_interval(secs => $__interval_ms/1000.0), day) AS time, postcode AS metric, avg(avg_intensity) AS value FROM cagg_carbon_daily WHERE $__timeFilter(day) GROUP BY 1,2 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Monthly bill",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": ".*_gbp$" }, "properties": [ { "id": "unit", "value": "currencyGBP" }, { "id": "decimals", "value": 2 } ] },
+          { "matcher": { "id": "byRegexp", "options": ".*_kwh$" }, "properties": [ { "id": "unit", "value": "kwatth" }, { "id": "decimals", "value": 1 } ] }
+        ]
+      },
+      "options": { "sortBy": [ { "displayName": "month", "desc": true } ] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "grafana-postgresql-datasource", "uid": "${DS_PG}" },
+          "format": "table",
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT month, import_kwh, export_kwh, import_pence/100.0 AS import_gbp, standing_pence/100.0 AS standing_gbp, export_pence/100.0 AS export_gbp, net_pence/100.0 AS net_gbp FROM bill_monthly ORDER BY month DESC"
+        }
+      ]
+    }
+  ]
+}

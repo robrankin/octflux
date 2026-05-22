@@ -7,6 +7,7 @@ name = "octflux"
 version = "0.1.0"
 description = "Configurable collector for Octopus Energy data, with pluggable storage/stream outputs and a control surface (REST + MCP)."
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27",

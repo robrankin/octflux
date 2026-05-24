@@ -146,9 +146,13 @@ FROM bill_daily GROUP BY month, account_number
 """
 
 # table -> (compress_orderby, compress_segmentby, compress_after)
+# Every PRIMARY KEY column must appear in segmentby or orderby, or older
+# TimescaleDB (<= 2.x) rejects the config ("cannot be enforced with the given
+# compression configuration"). PK = (mpan, serial_number, fuel, is_export,
+# interval_start); interval_start is the orderby, the rest segment the series.
 _COMPRESS = {
-    "consumption": ("interval_start DESC", "mpan", "30 days"),
-    "fact_cost": ("interval_start DESC", "mpan", "30 days"),
+    "consumption": ("interval_start DESC", "mpan, serial_number, fuel, is_export", "30 days"),
+    "fact_cost":   ("interval_start DESC", "mpan, serial_number, fuel, is_export", "30 days"),
 }
 
 

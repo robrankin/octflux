@@ -56,6 +56,14 @@ standing_charge = _table(
     key=("tariff_code", "valid_from"),
 )
 
+# Supporting indexes for "rate in force at time T" lookups: the Grafana cost
+# panels and refresh_silver do LATERAL ... ORDER BY valid_from DESC LIMIT 1.
+# The natural-key PK leads with tariff_code, so it can't serve these; index the
+# (is_export, valid_from) / (valid_from) access paths explicitly. Names are
+# stable so create_all matches the objects created on existing deployments.
+sa.Index("ix_unit_rate_export_validfrom", unit_rate.c.is_export, unit_rate.c.valid_from.desc())
+sa.Index("ix_standing_charge_validfrom", standing_charge.c.valid_from.desc())
+
 consumption = _table(
     "consumption",
     sa.Column("mpan", sa.String(32), nullable=False),

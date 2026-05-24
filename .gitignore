@@ -12,3 +12,7 @@ htmlcov/
 config.yaml
 *.db
 *.sqlite
+
+# deploy-local compose overrides + backups
+docker-compose.override.yml
+*.bak
